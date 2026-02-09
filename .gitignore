@@ -28,3 +28,5 @@ firebase-debug.log
 # Python
 __pycache__/
 *.pyc
+site/
+site_docs/

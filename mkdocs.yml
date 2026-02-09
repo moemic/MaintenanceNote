@@ -1,0 +1,14 @@
+site_name: Maintenance Note
+site_description: Car maintenance records
+site_url: https://moemic.github.io/MaintenanceNote/
+
+theme:
+  name: material
+  language: ja
+
+docs_dir: site_docs
+site_dir: site
+
+markdown_extensions:
+  - tables
+  - attr_list
