@@ -1,17 +1,20 @@
-name: Optimize Images
+name: Generate top _index.md
 
 on:
   push:
     paths:
-      - 'MaintenanceNote/**/assets/**'
-      - '**/assets/**'
+      - 'MaintenanceNote/**'
+      - 'scripts/generate_index.py'
+    paths-ignore:
+      - 'MaintenanceNote/_index.md'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  optimize:
+  generate:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
@@ -25,21 +28,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pillow pillow-heif
-
-      - name: Optimize images
-        run: python scripts/optimize_images.py
+      - name: Generate index
+        run: python scripts/generate_index.py --root MaintenanceNote --top-n 8
 
       - name: Commit and push if changed
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "chore(images): optimize assets [skip ci]"
+            git add MaintenanceNote/_index.md
+            git commit -m "chore: auto-generate top index [skip ci]"
             git pull --rebase
             git push
           else
