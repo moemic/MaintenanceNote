@@ -73,6 +73,77 @@ def collect_articles(vehicles: list[Vehicle]) -> list[Article]:
     return items
 
 
+def find_cover_image(vehicle: Vehicle) -> str | None:
+    """Find cover image in vehicle's assets directory."""
+    assets = vehicle.path / "assets"
+    if not assets.is_dir():
+        return None
+    for ext in ("jpg", "jpeg", "png", "svg", "webp"):
+        candidate = assets / f"cover.{ext}"
+        if candidate.exists():
+            return f"assets/cover.{ext}"
+    return None
+
+
+def collect_extra_files(vehicle: Vehicle) -> list[Path]:
+    """Collect non-article, non-system markdown files."""
+    extras: list[Path] = []
+    for p in sorted(vehicle.path.glob("*.md")):
+        if p.name in {"index.md", "_index.md", "_template.md"}:
+            continue
+        if ARTICLE_RE.match(p.name):
+            continue
+        extras.append(p)
+    return extras
+
+
+def render_vehicle_index(vehicle: Vehicle, articles: list[Article]) -> str:
+    vehicle_articles = [a for a in articles if a.vehicle == vehicle.name]
+    cover = find_cover_image(vehicle)
+    extras = collect_extra_files(vehicle)
+
+    lines: list[str] = []
+    lines.append(f"# {vehicle.name} メンテナンスノート")
+    lines.append("")
+
+    if cover:
+        lines.append(f"![{vehicle.name}]({cover})")
+        lines.append("")
+
+    lines.append("## 記録ルール")
+    lines.append("")
+    lines.append("- 記事ファイル名: `YYYY-MM-DD_走行距離km_内容.md`")
+    lines.append("- 画像保存先: `assets/`")
+    lines.append("- テンプレート: [`_template.md`](_template.md)")
+    lines.append("")
+
+    count = len(vehicle_articles)
+    lines.append(f"## メンテナンス履歴（全{count}件）")
+    lines.append("")
+
+    if vehicle_articles:
+        lines.append("| 日付 | 走行距離 | 内容 |")
+        lines.append("| --- | ---: | --- |")
+        for a in vehicle_articles:
+            date_str = a.date.strftime("%Y-%m-%d")
+            dist = f"{a.distance_km}km" if a.distance_km is not None else "-"
+            link = a.path.name
+            lines.append(f"| {date_str} | {dist} | [{a.title}]({link}) |")
+    else:
+        lines.append("まだメンテナンス記録がありません。")
+
+    if extras:
+        lines.append("")
+        lines.append("## その他")
+        lines.append("")
+        for p in extras:
+            name = p.stem
+            lines.append(f"- [{name}]({p.name})")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def relpath(path: Path, base: Path) -> str:
     return path.relative_to(base).as_posix()
 
@@ -127,6 +198,13 @@ def main() -> int:
     out_path = content_root / "_index.md"
     out_path.write_text(output, encoding="utf-8")
     print(f"generated {out_path}")
+
+    for vehicle in vehicles:
+        vehicle_index = render_vehicle_index(vehicle, articles)
+        idx_path = vehicle.path / "index.md"
+        idx_path.write_text(vehicle_index, encoding="utf-8")
+        print(f"generated {idx_path}")
+
     return 0
 
 

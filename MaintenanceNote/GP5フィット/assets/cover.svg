@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+  <rect width="800" height="400" rx="12" fill="#e8edf2"/>
+  <g transform="translate(400,170)" text-anchor="middle" fill="#6b7d8e">
+    <text font-family="sans-serif" font-size="48" font-weight="bold">GP5 FIT</text>
+    <text font-family="sans-serif" font-size="20" y="40">assets/cover.jpg に車両の写真を配置してください</text>
+  </g>
+</svg>

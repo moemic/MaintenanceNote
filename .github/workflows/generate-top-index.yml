@@ -7,6 +7,7 @@ on:
       - 'scripts/generate_index.py'
     paths-ignore:
       - 'MaintenanceNote/_index.md'
+      - 'MaintenanceNote/*/index.md'
   workflow_dispatch:
 
 permissions:
@@ -36,8 +37,8 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add MaintenanceNote/_index.md
-            git commit -m "chore: auto-generate top index [skip ci]"
+            git add MaintenanceNote/_index.md MaintenanceNote/*/index.md
+            git commit -m "chore: auto-generate indexes [skip ci]"
             git pull --rebase
             git push
           else
