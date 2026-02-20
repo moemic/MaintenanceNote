@@ -7,7 +7,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    import yaml as _yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+
 ARTICLE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d+)km_(.+)\.md$")
+DRAFT_RE = re.compile(r"^_(\d+)km_(.+)\.md$")
 
 
 @dataclass
@@ -85,13 +92,39 @@ def find_cover_image(vehicle: Vehicle) -> str | None:
     return None
 
 
+def load_schedule(vehicle_path: Path) -> dict:
+    """schedule.yml を読み込む。pyyaml が無い場合や file が無い場合は空 dict を返す。"""
+    if not HAS_YAML:
+        return {}
+    schedule_file = vehicle_path / "schedule.yml"
+    if not schedule_file.exists():
+        return {}
+    with schedule_file.open(encoding="utf-8") as f:
+        return _yaml.safe_load(f) or {}
+
+
+def collect_draft_files(vehicle: Vehicle) -> list[tuple[int, str, Path]]:
+    """次回予定の下書きファイル (_XXXXXkm_内容.md) を収集する。"""
+    drafts: list[tuple[int, str, Path]] = []
+    for p in sorted(vehicle.path.glob("_*km_*.md")):
+        m = DRAFT_RE.match(p.name)
+        if m:
+            km = int(m.group(1))
+            title = m.group(2)
+            drafts.append((km, title, p))
+    drafts.sort(key=lambda x: x[0])
+    return drafts
+
+
 def collect_extra_files(vehicle: Vehicle) -> list[Path]:
-    """Collect non-article, non-system markdown files."""
+    """非記事・非システム・非下書きの Markdown ファイルを収集する。"""
     extras: list[Path] = []
     for p in sorted(vehicle.path.glob("*.md")):
         if p.name in {"index.md", "_index.md", "_template.md"}:
             continue
         if ARTICLE_RE.match(p.name):
+            continue
+        if DRAFT_RE.match(p.name):
             continue
         extras.append(p)
     return extras
@@ -101,6 +134,9 @@ def render_vehicle_index(vehicle: Vehicle, articles: list[Article]) -> str:
     vehicle_articles = [a for a in articles if a.vehicle == vehicle.name]
     cover = find_cover_image(vehicle)
     extras = collect_extra_files(vehicle)
+    schedule = load_schedule(vehicle.path)
+    service_data: dict = schedule.get("service_data", {})
+    drafts = collect_draft_files(vehicle)
 
     lines: list[str] = []
     lines.append(f"# {vehicle.name} メンテナンスノート")
@@ -132,6 +168,31 @@ def render_vehicle_index(vehicle: Vehicle, articles: list[Article]) -> str:
     else:
         lines.append("まだメンテナンス記録がありません。")
 
+    # 次回メンテ予定（下書きファイルから）
+    if drafts:
+        lines.append("")
+        lines.append("## 次回メンテ予定")
+        lines.append("")
+        lines.append("| 予定走行距離 | 内容 |")
+        lines.append("| ---: | --- |")
+        for km, title, p in drafts:
+            lines.append(f"| {km:,}km | [{title}]({p.name}) |")
+
+    # サービスデータ（schedule.yml から）
+    if service_data:
+        lines.append("")
+        lines.append("## サービスデータ")
+        lines.append("")
+        for category, items in service_data.items():
+            lines.append(f"### {category}")
+            lines.append("")
+            lines.append("| 区分 | 油量 |")
+            lines.append("| --- | ---: |")
+            for key, value in items.items():
+                lines.append(f"| {key} | {value} |")
+            lines.append("")
+
+    # その他（下書き・記事以外の追加ファイル）
     if extras:
         lines.append("")
         lines.append("## その他")
