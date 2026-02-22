@@ -7,6 +7,7 @@ on:
       - 'MaintenanceNote/**'
       - 'scripts/prepare_docs.py'
       - 'mkdocs.yml'
+      - 'pwa/**'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
@@ -41,6 +42,9 @@ jobs:
 
       - name: Build site
         run: mkdocs build --clean
+
+      - name: Copy PWA to site/app
+        run: cp -r pwa/ site/app/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

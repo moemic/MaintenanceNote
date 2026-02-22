@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="メンテノート">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>メンテナンスノート</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --pri:      #1e40af;
+      --pri-d:    #1e3a8a;
+      --acc:      #3b82f6;
+      --bg:       #f1f5f9;
+      --card:     #fff;
+      --tx:       #0f172a;
+      --tx2:      #475569;
+      --tx3:      #94a3b8;
+      --bdr:      #e2e8f0;
+      --ok:       #16a34a;
+      --ng:       #dc2626;
+      --r:        12px;
+      --nav-h:    58px;
+      --hdr-h:    54px;
+      --st:       env(safe-area-inset-top,    0px);
+      --sb:       env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
+                   'Yu Gothic UI', Meiryo, 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--tx);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: var(--pri);
+      color: #fff;
+      flex-shrink: 0;
+      height: calc(var(--hdr-h) + var(--st));
+      padding: calc(var(--st) + 10px) 16px 10px;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    header h1 { font-size: 17px; font-weight: 700; flex: 1; }
+    #vtag {
+      font-size: 12px;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 20px;
+      padding: 4px 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    #main {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px;
+      padding-bottom: calc(var(--nav-h) + var(--sb) + 16px);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    nav {
+      position: fixed;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 100%; max-width: 640px;
+      height: calc(var(--nav-h) + var(--sb));
+      background: var(--card);
+      border-top: 1px solid var(--bdr);
+      display: flex;
+      z-index: 100;
+    }
+    .nb {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding-bottom: var(--sb);
+      border: none; background: none;
+      color: var(--tx3); font-size: 10px; font-weight: 500;
+      gap: 2px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: color .15s;
+    }
+    .nb .ic { font-size: 23px; line-height: 1; }
+    .nb.on  { color: var(--pri); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border-radius: var(--r);
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
+    .card-km {
+      display: inline-block;
+      background: #eff6ff; color: var(--pri);
+      font-weight: 700; font-size: 20px;
+      padding: 3px 10px; border-radius: 8px;
+      margin-bottom: 6px;
+    }
+    .card-title { font-weight: 600; font-size: 15px; }
+    .card-hint  { color: var(--tx2); font-size: 13px; margin-top: 6px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 11px 20px; border-radius: 10px;
+      font-size: 15px; font-weight: 600; border: none; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); opacity: .85; }
+    .btn-pri   { background: var(--pri); color: #fff; }
+    .btn-out   { background: transparent; color: var(--pri); border: 1.5px solid var(--pri); }
+    .btn-full  { width: 100%; }
+
+    /* ── Form ── */
+    .fg { margin-bottom: 16px; }
+    label.lbl {
+      display: block; font-size: 13px; font-weight: 600;
+      color: var(--tx2); margin-bottom: 6px;
+    }
+    label.lbl .req { color: var(--ng); margin-left: 2px; }
+    .inp, .sel, .ta {
+      width: 100%; padding: 11px 13px;
+      border: 1.5px solid var(--bdr); border-radius: 10px;
+      font-size: 16px; font-family: inherit;
+      background: #fff; color: var(--tx);
+      -webkit-appearance: none;
+      transition: border-color .2s;
+    }
+    .inp:focus, .sel:focus, .ta:focus {
+      outline: none; border-color: var(--acc);
+    }
+    .ta { resize: vertical; min-height: 72px; }
+    .hint { font-size: 12px; color: var(--tx3); margin-top: 4px; line-height: 1.5; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      top: calc(var(--hdr-h) + var(--st) + 10px);
+      left: 50%; transform: translateX(-50%) translateY(-6px);
+      background: #1e293b; color: #fff;
+      padding: 9px 20px; border-radius: 24px;
+      font-size: 14px; font-weight: 500;
+      opacity: 0; pointer-events: none; z-index: 999;
+      transition: opacity .3s, transform .3s;
+      white-space: nowrap; max-width: 90%;
+    }
+    #toast.show   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.ok     { background: var(--ok); }
+    #toast.err    { background: var(--ng); }
+
+    /* ── Utils ── */
+    .spin-wrap { text-align: center; padding: 52px 0; color: var(--tx3); }
+    .spinner {
+      width: 30px; height: 30px;
+      border: 3px solid var(--bdr); border-top-color: var(--pri);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty { text-align: center; padding: 52px 16px; color: var(--tx3); }
+    .empty .em { font-size: 48px; margin-bottom: 8px; }
+    .empty p  { font-size: 14px; }
+
+    .sec { font-size: 12px; font-weight: 700; color: var(--tx2);
+           text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+
+    .hist-row {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 11px 0; border-bottom: 1px solid var(--bdr);
+    }
+    .hist-row:last-child { border-bottom: none; }
+    .hist-date { font-size: 12px; color: var(--tx3); width: 76px; flex-shrink: 0; line-height: 1.5; }
+    .hist-title { font-size: 14px; font-weight: 600; }
+    .hist-km    { font-size: 13px; color: var(--tx2); margin-top: 2px; }
+
+    .alert {
+      padding: 11px 14px; border-radius: 10px;
+      font-size: 14px; margin-bottom: 14px;
+    }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🔧 メンテナンスノート</h1>
+    <span id="vtag" onclick="go('settings')">⚙ 設定</span>
+  </header>
+  <main id="main"></main>
+  <nav>
+    <button class="nb on" data-tab="schedule" onclick="go('schedule')">
+      <span class="ic">📅</span>次回予定
+    </button>
+    <button class="nb" data-tab="record" onclick="go('record')">
+      <span class="ic">✏️</span>記録入力
+    </button>
+    <button class="nb" data-tab="history" onclick="go('history')">
+      <span class="ic">📋</span>履歴
+    </button>
+    <button class="nb" data-tab="settings" onclick="go('settings')">
+      <span class="ic">⚙️</span>設定
+    </button>
+  </nav>
+  <div id="toast"></div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const cfg = {
+  get token()   { return localStorage.getItem('mn_token')   || ''; },
+  get owner()   { return localStorage.getItem('mn_owner')   || ''; },
+  get repo()    { return localStorage.getItem('mn_repo')    || ''; },
+  get vehicle() { return localStorage.getItem('mn_vehicle') || ''; },
+  set token(v)  { localStorage.setItem('mn_token',   v); },
+  set owner(v)  { localStorage.setItem('mn_owner',   v); },
+  set repo(v)   { localStorage.setItem('mn_repo',    v); },
+  set vehicle(v){ localStorage.setItem('mn_vehicle', v); },
+};
+
+function ready() { return cfg.token && cfg.owner && cfg.repo && cfg.vehicle; }
+
+// ── GITHUB API ───────────────────────────────────────────────────────────────
+async function ghApi(path, opts = {}) {
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
+  const res = await fetch(url, {
+    ...opts,
+    headers: {
+      Authorization: `token ${cfg.token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.message || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// UTF-8 文字列を base64 へ（日本語対応）
+function toB64(str) { return btoa(unescape(encodeURIComponent(str))); }
+
+async function listDir(path) { return ghApi(path); }
+
+async function putFile(path, content, message) {
+  return ghApi(path, {
+    method: 'PUT',
+    body: JSON.stringify({ message, content: toB64(content) }),
+  });
+}
+
+async function delFile(path, sha, message) {
+  return ghApi(path, {
+    method: 'DELETE',
+    body: JSON.stringify({ message, sha }),
+  });
+}
+
+// ── FILE PATTERNS ────────────────────────────────────────────────────────────
+const ART_RE   = /^(\d{4}-\d{2}-\d{2})_(\d+)km_(.+)\.md$/;
+const DRAFT_RE = /^_(\d+)km_(.+)\.md$/;
+
+function parseDraft(f) {
+  const m = DRAFT_RE.exec(f.name);
+  return m ? { km: +m[1], title: m[2], sha: f.sha, name: f.name } : null;
+}
+function parseArt(f) {
+  const m = ART_RE.exec(f.name);
+  return m ? { date: m[1], km: +m[2], title: m[3].replace(/_/g, ' '), name: f.name } : null;
+}
+
+// ── MD TEMPLATE ──────────────────────────────────────────────────────────────
+function makeContent({ date, km, title, place, cost, details, memo }) {
+  return [
+    `# ${title}`,
+    '',
+    `- 実施日: ${date}`,
+    `- 走行距離: ${km}km`,
+    `- 作業内容: ${title}`,
+    `- 実施場所: ${place || ''}`,
+    `- 費用: ${cost || ''}`,
+    '',
+    '## 作業詳細',
+    `- ${details || ''}`,
+    '',
+    '## 使用部品・油脂',
+    '- 品名:',
+    '- 品番:',
+    '- 数量:',
+    '',
+    '## メモ',
+    `- ${memo || ''}`,
+    '',
+    '## 画像',
+    '- `assets/` に画像を保存し、必要なら以下のように貼り付け',
+    '- `![説明](assets/画像ファイル名.jpg)`',
+  ].join('\n');
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg, cls = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (cls ? ` ${cls}` : '');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => { el.className = ''; }, 3200);
+}
+
+// ── ROUTER ───────────────────────────────────────────────────────────────────
+let _prefill = null;
+
+function go(tab, opts = {}) {
+  if (tab !== 'settings' && !ready()) tab = 'settings';
+
+  _prefill = opts.prefill || null;
+  if (tab !== 'record') _prefill = null;
+
+  document.querySelectorAll('.nb').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === tab)
+  );
+  document.getElementById('vtag').textContent = cfg.vehicle || '⚙ 設定';
+
+  const views = { schedule, record, history, settings };
+  views[tab](document.getElementById('main'));
+}
+
+// ── SCHEDULE VIEW ────────────────────────────────────────────────────────────
+function schedule(el) {
+  el.innerHTML = loading();
+  const dir = `MaintenanceNote/${cfg.vehicle}`;
+
+  listDir(dir).then(files => {
+    const drafts = files.map(parseDraft).filter(Boolean).sort((a, b) => a.km - b.km);
+
+    if (!drafts.length) {
+      el.innerHTML = `
+        <div class="empty">
+          <div class="em">✅</div>
+          <p>次回予定はありません</p>
+          <p style="margin-top:8px;font-size:12px;">
+            schedule.yml で交換サイクルを設定すると<br>記録後に自動で追加されます
+          </p>
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = `<div class="sec">${esc(cfg.vehicle)} — 次回メンテ予定</div>`;
+    drafts.forEach(d => {
+      const c = document.createElement('div');
+      c.className = 'card';
+      c.style.cursor = 'pointer';
+      c.innerHTML = `
+        <div class="card-km">${d.km.toLocaleString()} km</div>
+        <div class="card-title">${esc(d.title)}</div>
+        <div class="card-hint">タップして記録を入力 →</div>`;
+      c.addEventListener('click', () => go('record', { prefill: d }));
+      el.appendChild(c);
+    });
+
+  }).catch(err => { el.innerHTML = errBox(err); });
+}
+
+// ── RECORD VIEW ──────────────────────────────────────────────────────────────
+function record(el) {
+  const pf    = _prefill || {};
+  const today = new Date().toLocaleDateString('sv');  // YYYY-MM-DD
+
+  el.innerHTML = `
+    ${pf.title ? `
+      <div class="alert alert-info">
+        📋 <strong>${esc(pf.title)}</strong>（予定 ${(pf.km || 0).toLocaleString()}km）の記録を入力
+      </div>` : ''}
+    <form id="rf" class="card">
+      <div class="fg">
+        <label class="lbl">実施日<span class="req">*</span></label>
+        <input class="inp" type="date" id="f-date" value="${today}" required>
+      </div>
+      <div class="fg">
+        <label class="lbl">走行距離（km）<span class="req">*</span></label>
+        <input class="inp" type="number" id="f-km" placeholder="例: 142341"
+               value="${pf.km || ''}" inputmode="numeric" required>
+      </div>
+      <div class="fg">
+        <label class="lbl">作業内容<span class="req">*</span></label>
+        <input class="inp" type="text" id="f-title" placeholder="例: オイル交換"
+               value="${esc(pf.title || '')}">
+      </div>
+      <div class="fg">
+        <label class="lbl">実施場所</label>
+        <input class="inp" type="text" id="f-place" placeholder="例: ガソリンスタンド">
+      </div>
+      <div class="fg">
+        <label class="lbl">費用</label>
+        <input class="inp" type="text" id="f-cost" placeholder="例: 2500円">
+      </div>
+      <div class="fg">
+        <label class="lbl">作業詳細・使用品</label>
+        <textarea class="ta" id="f-detail" placeholder="使用オイル、交換部品など"></textarea>
+      </div>
+      <div class="fg">
+        <label class="lbl">メモ</label>
+        <textarea class="ta" id="f-memo"></textarea>
+      </div>
+      <button type="submit" class="btn btn-pri btn-full" id="sbtn">記録する</button>
+    </form>`;
+
+  document.getElementById('rf').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn  = document.getElementById('sbtn');
+    const data = {
+      date:    document.getElementById('f-date').value,
+      km:      document.getElementById('f-km').value,
+      title:   document.getElementById('f-title').value.trim(),
+      place:   document.getElementById('f-place').value.trim(),
+      cost:    document.getElementById('f-cost').value.trim(),
+      details: document.getElementById('f-detail').value.trim(),
+      memo:    document.getElementById('f-memo').value.trim(),
+    };
+
+    if (!data.date || !data.km || !data.title) {
+      toast('日付・走行距離・作業内容は必須です', 'err');
+      return;
+    }
+
+    btn.disabled = true; btn.textContent = '保存中…';
+
+    try {
+      const fname   = `${data.date}_${data.km}km_${data.title.replace(/\//g, '・')}.md`;
+      const fpath   = `MaintenanceNote/${cfg.vehicle}/${fname}`;
+      await putFile(fpath, makeContent(data), `記録: ${data.title} (${data.km}km)`);
+
+      // 下書きファイルを削除（次の予定は GitHub Actions が自動作成）
+      if (pf.sha && pf.name) {
+        const dpath = `MaintenanceNote/${cfg.vehicle}/${pf.name}`;
+        await delFile(dpath, pf.sha, `下書き削除: ${pf.title}`);
+      }
+
+      toast('記録しました ✓', 'ok');
+      setTimeout(() => go('schedule'), 900);
+    } catch (err) {
+      toast('エラー: ' + err.message, 'err');
+      btn.disabled = false; btn.textContent = '記録する';
+    }
+  });
+}
+
+// ── HISTORY VIEW ─────────────────────────────────────────────────────────────
+function history(el) {
+  el.innerHTML = loading();
+  const dir = `MaintenanceNote/${cfg.vehicle}`;
+
+  listDir(dir).then(files => {
+    const arts = files.map(parseArt).filter(Boolean)
+                      .sort((a, b) => b.date.localeCompare(a.date));
+
+    if (!arts.length) {
+      el.innerHTML = `<div class="empty"><div class="em">📭</div><p>記録がありません</p></div>`;
+      return;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="sec" style="margin-bottom:8px;">${esc(cfg.vehicle)} — ${arts.length}件</div>`;
+
+    arts.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'hist-row';
+      row.innerHTML = `
+        <div class="hist-date">${a.date}</div>
+        <div>
+          <div class="hist-title">${esc(a.title)}</div>
+          <div class="hist-km">${a.km.toLocaleString()} km</div>
+        </div>`;
+      card.appendChild(row);
+    });
+
+    el.innerHTML = '';
+    el.appendChild(card);
+  }).catch(err => { el.innerHTML = errBox(err); });
+}
+
+// ── SETTINGS VIEW ────────────────────────────────────────────────────────────
+function settings(el) {
+  el.innerHTML = `
+    <div class="card">
+      <div class="sec" style="margin-bottom:14px;">GitHub 接続設定</div>
+      <div class="fg">
+        <label class="lbl">Personal Access Token<span class="req">*</span></label>
+        <input class="inp" type="password" id="s-tok" value="${esc(cfg.token)}"
+               placeholder="github_pat_xxxx" autocomplete="off">
+        <p class="hint">
+          GitHub → Settings → Developer settings → Personal access tokens (Fine-grained)<br>
+          <strong>Contents: Read and write</strong> 権限が必要です
+        </p>
+      </div>
+      <div class="fg">
+        <label class="lbl">オーナー名<span class="req">*</span></label>
+        <input class="inp" type="text" id="s-own" value="${esc(cfg.owner)}" placeholder="例: moemic">
+      </div>
+      <div class="fg">
+        <label class="lbl">リポジトリ名<span class="req">*</span></label>
+        <input class="inp" type="text" id="s-rep" value="${esc(cfg.repo)}" placeholder="例: MaintenanceNote">
+      </div>
+      <button class="btn btn-out btn-full" id="test-btn" onclick="testConnect()">
+        接続テスト・車両取得
+      </button>
+    </div>
+
+    <div class="card" id="vcard" style="display:none;">
+      <div class="sec" style="margin-bottom:14px;">車両選択</div>
+      <div class="fg">
+        <label class="lbl">使用する車両<span class="req">*</span></label>
+        <select class="sel" id="s-veh"></select>
+      </div>
+      <button class="btn btn-pri btn-full" onclick="saveSettings()">保存して開始</button>
+    </div>
+
+    <div class="card">
+      <div class="sec" style="margin-bottom:8px;">使い方</div>
+      <div style="font-size:13px;color:var(--tx2);line-height:1.8;">
+        <p>① GitHub で PAT を作成（Contents 権限）</p>
+        <p>② 接続テストで車両リストを取得</p>
+        <p>③ 車両を選んで保存</p>
+        <p>④「次回予定」タブから記録を入力 → 次の予定が自動作成</p>
+        <p style="margin-top:8px;">
+          📱 ブラウザの「ホーム画面に追加」でアプリとして使えます
+        </p>
+      </div>
+    </div>`;
+}
+
+async function testConnect() {
+  const btn = document.getElementById('test-btn');
+  btn.disabled = true; btn.textContent = '接続中…';
+
+  cfg.token = document.getElementById('s-tok').value.trim();
+  cfg.owner = document.getElementById('s-own').value.trim();
+  cfg.repo  = document.getElementById('s-rep').value.trim();
+
+  try {
+    const files = await listDir('MaintenanceNote');
+    const vList = files.filter(f => f.type === 'dir' && !f.name.startsWith('.')).map(f => f.name);
+
+    const sel = document.getElementById('s-veh');
+    sel.innerHTML = vList.map(v =>
+      `<option value="${esc(v)}" ${v === cfg.vehicle ? 'selected' : ''}>${esc(v)}</option>`
+    ).join('');
+
+    document.getElementById('vcard').style.display = '';
+    toast('接続成功！車両を選択してください', 'ok');
+  } catch (err) {
+    toast('接続エラー: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '接続テスト・車両取得';
+  }
+}
+
+function saveSettings() {
+  cfg.vehicle = document.getElementById('s-veh').value;
+  toast('設定を保存しました', 'ok');
+  setTimeout(() => go('schedule'), 700);
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function loading() {
+  return `<div class="spin-wrap"><div class="spinner"></div><p>読み込み中…</p></div>`;
+}
+function errBox(err) {
+  return `<div class="card" style="border:1px solid #fecaca;">
+    <div style="color:var(--ng);font-weight:600;margin-bottom:6px;">⚠ エラー</div>
+    <div style="color:var(--tx2);font-size:14px;">${esc(err.message)}</div>
+  </div>`;
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+go('schedule');
+</script>
+</body>
+</html>
