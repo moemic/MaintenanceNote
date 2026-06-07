@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-ARTICLE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d+)km_(.+)\.md$")
+ARTICLE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}|Plan)_(\d+)km_(.+)\.md$")
 
 
 @dataclass
@@ -18,7 +18,7 @@ class Vehicle:
 
 @dataclass
 class Article:
-    date: datetime
+    date: datetime | None
     distance_km: int | None
     title: str
     path: Path
@@ -47,7 +47,7 @@ def discover_vehicles(content_root: Path) -> list[Vehicle]:
 
 
 def parse_article(path: Path, vehicle: str) -> Article | None:
-    if path.name in {"index.md", "_index.md"}:
+    if path.name in {"index.md", "_index.md", "_rules.md", "_template.md"}:
         return None
     if path.suffix.lower() != ".md":
         return None
@@ -56,7 +56,12 @@ def parse_article(path: Path, vehicle: str) -> Article | None:
     if not m:
         return None
 
-    dt = datetime.strptime(m.group(1), "%Y-%m-%d")
+    date_str = m.group(1)
+    if date_str == "Plan":
+        dt = None
+    else:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+
     dist = int(m.group(2))
     title = m.group(3).replace("_", " ")
     return Article(date=dt, distance_km=dist, title=title, path=path, vehicle=vehicle)
@@ -69,7 +74,6 @@ def collect_articles(vehicles: list[Vehicle]) -> list[Article]:
             article = parse_article(p, vehicle.name)
             if article:
                 items.append(article)
-    items.sort(key=lambda x: (x.date, x.path.name), reverse=True)
     return items
 
 
@@ -84,12 +88,18 @@ def find_cover_image(vehicle: Vehicle) -> str | None:
             return f"assets/cover.{ext}"
     return None
 
+def find_rules(vehicle: Vehicle) -> str | None:
+    """Find and load rules file (_rules.md)."""
+    rules = vehicle.path / "_rules.md"
+    if rules.exists():
+        return rules.read_text(encoding="utf-8").strip()
+    return None
 
 def collect_extra_files(vehicle: Vehicle) -> list[Path]:
     """Collect non-article, non-system markdown files."""
     extras: list[Path] = []
     for p in sorted(vehicle.path.glob("*.md")):
-        if p.name in {"index.md", "_index.md", "_template.md"}:
+        if p.name in {"index.md", "_index.md", "_template.md", "_rules.md"}:
             continue
         if ARTICLE_RE.match(p.name):
             continue
@@ -99,8 +109,16 @@ def collect_extra_files(vehicle: Vehicle) -> list[Path]:
 
 def render_vehicle_index(vehicle: Vehicle, articles: list[Article]) -> str:
     vehicle_articles = [a for a in articles if a.vehicle == vehicle.name]
+    planned = [a for a in vehicle_articles if a.date is None]
+    history = [a for a in vehicle_articles if a.date is not None]
+
+    # Sort plans by distance, history by date
+    planned.sort(key=lambda x: (x.distance_km or 0))
+    history.sort(key=lambda x: (x.date, x.path.name), reverse=True)
+
     cover = find_cover_image(vehicle)
     extras = collect_extra_files(vehicle)
+    rules = find_rules(vehicle)
 
     lines: list[str] = []
     lines.append(f"# {vehicle.name} メンテナンスノート")
@@ -110,21 +128,36 @@ def render_vehicle_index(vehicle: Vehicle, articles: list[Article]) -> str:
         lines.append(f"![{vehicle.name}]({cover})")
         lines.append("")
 
+    if rules:
+        lines.append(rules)
+        lines.append("")
+
+    if planned:
+        lines.append("## 今後の予定 (Forecast)")
+        lines.append("")
+        lines.append("| 日付 | 走行距離目安 | 内容 |")
+        lines.append("| --- | ---: | --- |")
+        for a in planned:
+            dist = f"{a.distance_km}km" if a.distance_km is not None else "-"
+            link = a.path.name
+            lines.append(f"| (未定) | {dist} | [{a.title}]({link}) |")
+        lines.append("")
+
     lines.append("## 記録ルール")
     lines.append("")
-    lines.append("- 記事ファイル名: `YYYY-MM-DD_走行距離km_内容.md`")
+    lines.append("- 記事ファイル名: `YYYY-MM-DD_走行距離km_内容.md` (予定は `Plan_走行距離km_内容.md`)")
     lines.append("- 画像保存先: `assets/`")
     lines.append("- テンプレート: [`_template.md`](_template.md)")
     lines.append("")
 
-    count = len(vehicle_articles)
+    count = len(history)
     lines.append(f"## メンテナンス履歴（全{count}件）")
     lines.append("")
 
-    if vehicle_articles:
+    if history:
         lines.append("| 日付 | 走行距離 | 内容 |")
         lines.append("| --- | ---: | --- |")
-        for a in vehicle_articles:
+        for a in history:
             date_str = a.date.strftime("%Y-%m-%d")
             dist = f"{a.distance_km}km" if a.distance_km is not None else "-"
             link = a.path.name
@@ -165,10 +198,29 @@ def render(content_root: Path, vehicles: list[Vehicle], articles: list[Article],
         lines.append("- （車両が見つかりません）")
 
     lines.append("")
+    lines.append("## 直近のメンテ予定 (Upcoming)")
+    lines.append("")
+
+    planned = [a for a in articles if a.date is None]
+    planned.sort(key=lambda x: (x.distance_km or 0))
+
+    if planned:
+        lines.append("| 車両 | 走行距離目安 | 内容 |")
+        lines.append("| --- | ---: | --- |")
+        for a in planned:
+            dist = f"{a.distance_km}km" if a.distance_km is not None else "-"
+            link = relpath(a.path, content_root)
+            lines.append(f"| {a.vehicle} | {dist} | [{a.title}]({link}) |")
+    else:
+        lines.append("- （今後の予定はありません）")
+
+    lines.append("")
     lines.append(f"## 最新メンテ上位{top_n}件")
     lines.append("")
 
-    picked = articles[:top_n]
+    history = [a for a in articles if a.date is not None]
+    history.sort(key=lambda x: (x.date, x.path.name), reverse=True)
+    picked = history[:top_n]
     if picked:
         lines.append("| 日付 | 車両 | 走行距離 | 内容 |")
         lines.append("| --- | --- | ---: | --- |")

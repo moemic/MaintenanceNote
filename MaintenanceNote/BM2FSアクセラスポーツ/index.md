@@ -4,7 +4,7 @@
 
 ## 記録ルール
 
-- 記事ファイル名: `YYYY-MM-DD_走行距離km_内容.md`
+- 記事ファイル名: `YYYY-MM-DD_走行距離km_内容.md` (予定は `Plan_走行距離km_内容.md`)
 - 画像保存先: `assets/`
 - テンプレート: [`_template.md`](_template.md)
 
